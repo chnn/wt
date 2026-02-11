@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 
-use crate::context::{Context, execute};
+use crate::context::{Context, execute_with_progress};
 use crate::git;
 
 pub fn run(slugs: Vec<String>, dry_run: bool) -> Result<()> {
@@ -39,17 +39,12 @@ fn remove_one(
     let wt = worktrees
         .iter()
         .find(|w| w.path == expected_path)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "no worktree found at {}",
-                expected_path.display()
-            )
-        })?;
+        .ok_or_else(|| anyhow::anyhow!("no worktree found at {}", expected_path.display()))?;
 
     let branch = wt.branch.clone();
 
     let path = expected_path.clone();
-    execute(
+    execute_with_progress(
         ctx,
         &format!("git worktree remove {}", path.display()),
         move || git::remove_worktree(&path),
@@ -57,7 +52,7 @@ fn remove_one(
 
     if let Some(branch) = branch {
         let b = branch.clone();
-        execute(ctx, &format!("git branch -D {b}"), move || {
+        execute_with_progress(ctx, &format!("git branch -D {b}"), move || {
             git::delete_branch(&branch)
         })?;
     }

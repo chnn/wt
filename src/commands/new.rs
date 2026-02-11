@@ -1,9 +1,10 @@
 use std::path::Path;
+use std::process::{Command, Stdio};
 
-use anyhow::{Result, bail};
+use anyhow::{Context as AnyhowContext, Result, bail};
 
 use crate::config;
-use crate::context::{Context, execute};
+use crate::context::{Context, execute_with_progress};
 use crate::git;
 
 pub fn run(
@@ -26,6 +27,7 @@ pub fn run(
         None => cfg.branch_prefix,
     };
     let symlinks = symlink_files.or(cfg.symlink_files).unwrap_or_default();
+    let post_create_commands = cfg.post_create_commands.unwrap_or_default();
 
     let branch = config::format_branch_name(&prefix, &slug);
     let main_branch = git::detect_main_branch()?;
@@ -42,7 +44,7 @@ pub fn run(
 
     // Fetch latest from origin
     let fetch_main = main_branch.clone();
-    execute(&ctx, &format!("git fetch origin {fetch_main}"), || {
+    execute_with_progress(&ctx, &format!("git fetch origin {fetch_main}"), || {
         git::git(&["fetch", "origin", &fetch_main])?;
         Ok(())
     })?;
@@ -52,7 +54,7 @@ pub fn run(
     let add_path = wt_path.clone();
     let add_branch = branch.clone();
     let add_start = start_point.clone();
-    execute(
+    execute_with_progress(
         &ctx,
         &format!(
             "git worktree add --no-track -b {add_branch} {} {add_start}",
@@ -69,12 +71,19 @@ pub fn run(
         let tgt = target.clone();
         let file_name = file.clone();
 
-        execute(
+        execute_with_progress(&ctx, &format!("symlink {}", target.display()), move || {
+            create_symlink(&src, &tgt, &file_name)
+        })?;
+    }
+
+    // Run post-create commands from config in the new worktree
+    for command in &post_create_commands {
+        let worktree = wt_path.clone();
+        let command_text = command.clone();
+        execute_with_progress(
             &ctx,
-            &format!("symlink {}", target.display()),
-            move || {
-                create_symlink(&src, &tgt, &file_name)
-            },
+            &format!("run in {}: {command_text}", worktree.display()),
+            move || run_post_create_command(&worktree, &command_text),
         )?;
     }
 
@@ -107,6 +116,40 @@ fn create_symlink(source: &Path, target: &Path, file_name: &str) -> Result<()> {
         } else {
             std::os::windows::fs::symlink_file(source, target)?;
         }
+    }
+
+    Ok(())
+}
+
+fn run_post_create_command(worktree_path: &Path, command: &str) -> Result<()> {
+    let mut process = if cfg!(windows) {
+        let mut cmd = Command::new("cmd");
+        cmd.args(["/C", command]);
+        cmd
+    } else {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", command]);
+        cmd
+    };
+
+    let status = process
+        .current_dir(worktree_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .with_context(|| {
+            format!(
+                "failed to run post-create command `{command}` in {}",
+                worktree_path.display()
+            )
+        })?;
+
+    if !status.success() {
+        bail!(
+            "post-create command `{command}` failed with status {status} in {}",
+            worktree_path.display()
+        );
     }
 
     Ok(())

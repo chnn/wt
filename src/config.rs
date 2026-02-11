@@ -7,6 +7,7 @@ use serde::Deserialize;
 pub struct WtConfig {
     pub branch_prefix: Option<Vec<String>>,
     pub symlink_files: Option<Vec<String>>,
+    pub post_create_commands: Option<Vec<String>>,
 }
 
 pub fn load_config(root_worktree: &Path) -> Result<WtConfig> {
@@ -34,6 +35,11 @@ pub fn config_template() -> &'static str {
 # Useful for editor configs, environment files, etc.
 #
 # symlink_files = [\".env\", \".idea\"]
+
+# Shell commands to run in each new worktree after creation.
+# Commands run in order and stop on the first failure.
+#
+# post_create_commands = [\"npm install\", \"npm run build\"]
 "
 }
 
@@ -77,6 +83,7 @@ mod tests {
         let config = load_config(&dir).unwrap();
         assert!(config.branch_prefix.is_none());
         assert!(config.symlink_files.is_none());
+        assert!(config.post_create_commands.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -84,17 +91,11 @@ mod tests {
     fn test_load_config_partial() {
         let dir = std::env::temp_dir().join("wt-test-partial-config");
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(
-            dir.join(".wtconfig.toml"),
-            "branch_prefix = [\"chnn\"]\n",
-        )
-        .unwrap();
+        std::fs::write(dir.join(".wtconfig.toml"), "branch_prefix = [\"chnn\"]\n").unwrap();
         let config = load_config(&dir).unwrap();
-        assert_eq!(
-            config.branch_prefix,
-            Some(vec!["chnn".to_string()])
-        );
+        assert_eq!(config.branch_prefix, Some(vec!["chnn".to_string()]));
         assert!(config.symlink_files.is_none());
+        assert!(config.post_create_commands.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -104,7 +105,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join(".wtconfig.toml"),
-            "branch_prefix = [\"team\", \"chnn\"]\nsymlink_files = [\".env\", \".idea\"]\n",
+            "branch_prefix = [\"team\", \"chnn\"]\nsymlink_files = [\".env\", \".idea\"]\npost_create_commands = [\"npm install\", \"npm test\"]\n",
         )
         .unwrap();
         let config = load_config(&dir).unwrap();
@@ -115,6 +116,10 @@ mod tests {
         assert_eq!(
             config.symlink_files,
             Some(vec![".env".to_string(), ".idea".to_string()])
+        );
+        assert_eq!(
+            config.post_create_commands,
+            Some(vec!["npm install".to_string(), "npm test".to_string()])
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

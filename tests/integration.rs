@@ -33,6 +33,13 @@ fn setup_repos() -> (TempDir, std::path::PathBuf) {
         .output()
         .unwrap();
 
+    // Ensure local default branch is main regardless of system git defaults.
+    Command::new("git")
+        .args(["checkout", "-B", "main"])
+        .current_dir(&local_path)
+        .output()
+        .unwrap();
+
     // Configure user in local clone
     Command::new("git")
         .args(["config", "user.email", "test@test.com"])
@@ -41,6 +48,11 @@ fn setup_repos() -> (TempDir, std::path::PathBuf) {
         .unwrap();
     Command::new("git")
         .args(["config", "user.name", "Test"])
+        .current_dir(&local_path)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "commit.gpgsign", "false"])
         .current_dir(&local_path)
         .output()
         .unwrap();
@@ -53,7 +65,7 @@ fn setup_repos() -> (TempDir, std::path::PathBuf) {
         .output()
         .unwrap();
     Command::new("git")
-        .args(["commit", "-m", "initial commit"])
+        .args(["commit", "--no-verify", "-m", "initial commit"])
         .current_dir(&local_path)
         .output()
         .unwrap();
@@ -172,11 +184,7 @@ fn test_new_and_list_and_remove() {
     assert!(!wt_path.exists());
 
     // List should be empty
-    wt_cmd(&local)
-        .args(["ls"])
-        .assert()
-        .success()
-        .stdout("");
+    wt_cmd(&local).args(["ls"]).assert().success().stdout("");
 }
 
 #[test]
@@ -208,11 +216,7 @@ fn test_new_with_multi_segment_prefix() {
 fn test_new_with_config_prefix() {
     let (_tmp, local) = setup_repos();
 
-    std::fs::write(
-        local.join(".wtconfig.toml"),
-        "branch_prefix = [\"chnn\"]\n",
-    )
-    .unwrap();
+    std::fs::write(local.join(".wtconfig.toml"), "branch_prefix = [\"chnn\"]\n").unwrap();
 
     wt_cmd(&local)
         .args(["new", "feat"])
@@ -236,6 +240,31 @@ fn test_new_cli_prefix_overrides_config() {
         .assert()
         .success()
         .stderr(predicates::str::contains("branch from-cli/feat"));
+}
+
+#[test]
+fn test_new_runs_post_create_commands_from_config() {
+    let (_tmp, local) = setup_repos();
+
+    std::fs::write(
+        local.join(".wtconfig.toml"),
+        "post_create_commands = [\"git rev-parse --show-toplevel > .wt-post-create-path\"]\n",
+    )
+    .unwrap();
+
+    wt_cmd(&local).args(["new", "feat"]).assert().success();
+
+    let wt_path = _tmp.path().join("myproject-feat");
+    let marker = wt_path.join(".wt-post-create-path");
+    assert!(marker.exists());
+
+    let recorded_path = std::fs::read_to_string(&marker).unwrap();
+    assert_eq!(
+        std::path::PathBuf::from(recorded_path.trim())
+            .canonicalize()
+            .unwrap(),
+        wt_path.canonicalize().unwrap()
+    );
 }
 
 #[test]
@@ -314,7 +343,9 @@ fn test_new_symlink_warns_on_missing_source() {
         .args(["new", "feat", "--symlink-file", ".env"])
         .assert()
         .success()
-        .stderr(predicates::str::contains("warning: symlink source does not exist"));
+        .stderr(predicates::str::contains(
+            "warning: symlink source does not exist",
+        ));
 }
 
 #[test]
@@ -337,10 +368,7 @@ fn test_remove_multiple() {
     wt_cmd(&local).args(["new", "two"]).assert().success();
 
     // Remove both at once
-    wt_cmd(&local)
-        .args(["rm", "one", "two"])
-        .assert()
-        .success();
+    wt_cmd(&local).args(["rm", "one", "two"]).assert().success();
 
     // Both should be gone
     assert!(!_tmp.path().join("myproject-one").exists());

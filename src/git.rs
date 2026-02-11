@@ -116,7 +116,15 @@ pub fn parse_worktree_list(output: &str) -> Vec<WorktreeInfo> {
 
 pub fn add_worktree(path: &Path, branch: &str, start_point: &str) -> Result<()> {
     let path_str = path.to_string_lossy();
-    git(&["worktree", "add", "--no-track", "-b", branch, &path_str, start_point])?;
+    git(&[
+        "worktree",
+        "add",
+        "--no-track",
+        "-b",
+        branch,
+        &path_str,
+        start_point,
+    ])?;
     Ok(())
 }
 

@@ -12,10 +12,7 @@ pub fn run(dry_run: bool) -> Result<()> {
     let config_path = ctx.root_worktree.join(".wtconfig.toml");
 
     if config_path.exists() {
-        bail!(
-            ".wtconfig.toml already exists at {}",
-            config_path.display()
-        );
+        bail!(".wtconfig.toml already exists at {}", config_path.display());
     }
 
     execute(&ctx, "write .wtconfig.toml", || {
@@ -28,7 +25,10 @@ pub fn run(dry_run: bool) -> Result<()> {
         add_to_exclude(&exclude_path)
     })?;
 
-    println!("Initialized .wtconfig.toml in {}", ctx.root_worktree.display());
+    println!(
+        "Initialized .wtconfig.toml in {}",
+        ctx.root_worktree.display()
+    );
     Ok(())
 }
 
