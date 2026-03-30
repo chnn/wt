@@ -391,3 +391,49 @@ fn test_list_from_linked_worktree() {
         .success()
         .stdout(predicates::str::contains("feat"));
 }
+
+#[test]
+fn test_new_accepts_prompt_flag() {
+    // The binary accepts -p (for --help visibility) but the flag is handled
+    // by the shell wrapper. The binary just creates the worktree as normal.
+    let (_tmp, local) = setup_repos();
+
+    wt_cmd(&local)
+        .args(["new", "feat", "-p"])
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("Created worktree 'feat'"));
+
+    let wt_path = _tmp.path().join("myproject-feat");
+    assert!(wt_path.exists());
+}
+
+#[test]
+fn test_new_accepts_dangerously_skip_permissions_flag() {
+    let (_tmp, local) = setup_repos();
+
+    wt_cmd(&local)
+        .args(["new", "feat", "-p", "--dangerously-skip-permissions"])
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("Created worktree 'feat'"));
+}
+
+#[test]
+fn test_shell_init_outputs_function() {
+    let output = AssertCommand::cargo_bin("wt")
+        .unwrap()
+        .arg("shell-init")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).unwrap();
+    assert!(stdout.contains("wt()"));
+    assert!(stdout.contains("command wt"));
+    assert!(stdout.contains("claude"));
+    assert!(stdout.contains("EDITOR"));
+    assert!(stdout.contains("--dangerously-skip-permissions"));
+}

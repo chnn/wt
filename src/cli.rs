@@ -25,7 +25,18 @@ pub enum Commands {
         /// Print what would be done without making changes
         #[arg(long)]
         dry_run: bool,
+
+        /// Open $EDITOR to author a prompt, then run claude in the new worktree
+        #[arg(short = 'p', long)]
+        prompt: bool,
+
+        /// Pass --dangerously-skip-permissions to claude (requires -p)
+        #[arg(long)]
+        dangerously_skip_permissions: bool,
     },
+
+    /// Print shell function for sourcing in .zshrc/.bashrc
+    ShellInit,
 
     /// List worktree slugs
     #[command(alias = "ls")]

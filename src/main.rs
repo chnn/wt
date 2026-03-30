@@ -18,7 +18,12 @@ fn main() -> Result<()> {
             branch_prefix,
             symlink_files,
             dry_run,
+            // -p and --dangerously-skip-permissions are handled by the shell
+            // wrapper from `wt shell-init`. Accepted here for --help visibility.
+            ..
         } => commands::new::run(slug, branch_prefix, symlink_files, dry_run),
+
+        Commands::ShellInit => commands::shell_init::run(),
 
         Commands::List { dry_run } => commands::list::run(dry_run),
 
