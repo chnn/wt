@@ -29,12 +29,16 @@ pub fn run() -> Result<()> {
         fi
       fi
 
+      # Print the prompt file location so it can be reused if interrupted
+      if [[ -n "$prompt_file" ]]; then
+        echo "prompt saved to $prompt_file" >&2
+      fi
+
       # Create the worktree (flags stripped so the binary just does its job)
       local wt_path
       wt_path=$(command wt "${{wt_args[@]}}")
       local exit_code=$?
       if [[ $exit_code -ne 0 ]]; then
-        [[ -n "$prompt_file" ]] && rm -f "$prompt_file"
         return $exit_code
       fi
 
@@ -44,7 +48,6 @@ pub fn run() -> Result<()> {
       if [[ -n "$prompt_file" ]]; then
         local prompt
         prompt=$(<"$prompt_file")
-        rm -f "$prompt_file"
 
         local claude_args=("$prompt")
         $has_skip_perms && claude_args+=(--dangerously-skip-permissions)
